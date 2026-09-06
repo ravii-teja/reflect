@@ -1,0 +1,6 @@
+{
+  "name": "Reflect",
+  "description": "A private AI thinking space and personal reflection journal with semantic memory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile in Reflect",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique Firebase user ID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Reflect journaling/thinking conversation session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Conversation ID" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "title": { "type": "string", "description": "Title or topic of conversation" },
+        "status": { "type": "string", "enum": ["active", "archived", "reflected"], "description": "Conversation status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["id", "userId", "title", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message within a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Message ID" },
+        "role": { "type": "string", "enum": ["user", "model", "system"], "description": "Role of speaker" },
+        "content": { "type": "string", "description": "Message text" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp" }
+      },
+      "required": ["id", "role", "content", "createdAt"]
+    },
+    "Reflection": {
+      "title": "Reflection",
+      "description": "Synthesized reflection extracted from conversations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Reflection ID" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "conversationId": { "type": "string", "description": "Origin conversation ID" },
+        "summary": { "type": "string", "description": "Executive reflection summary" },
+        "themes": { "type": "array", "description": "Dominant reflection themes" },
+        "insights": { "type": "array", "description": "Core personal insights" },
+        "decisions": { "type": "array", "description": "Decisions reached" },
+        "openLoops": { "type": "array", "description": "Unresolved questions and open loops" },
+        "futurePrompts": { "type": "array", "description": "Probing questions for next sessions" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "conversationId", "summary", "createdAt"]
+    },
+    "Memory": {
+      "title": "Memory",
+      "description": "Durable semantic personal memory with client-side E2EE",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Memory ID" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "type": { "type": "string", "enum": ["insight", "decision", "goal", "theme", "open_loop"], "description": "Type of memory" },
+        "content": { "type": "string", "description": "Plaintext or E2EE encrypted ciphertext" },
+        "isEncrypted": { "type": "boolean", "description": "Whether content is E2EE encrypted" },
+        "iv": { "type": "string", "description": "Initialization vector for E2EE" },
+        "sourceReflectionId": { "type": "string", "description": "Source reflection reference" },
+        "importance": { "type": "number", "description": "Significance weight 1-5" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["id", "userId", "type", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile document"
+    },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "User scoped conversation session"
+    },
+    "/users/{userId}/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Message within a user's conversation"
+    },
+    "/users/{userId}/reflections/{reflectionId}": {
+      "schema": "Reflection",
+      "description": "User scoped reflection artifact"
+    },
+    "/users/{userId}/memories/{memoryId}": {
+      "schema": "Memory",
+      "description": "User scoped durable semantic memory"
+    }
+  }
+}
