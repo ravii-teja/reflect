@@ -43,6 +43,8 @@ function ReflectMain() {
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [insightsData, setInsightsData] = useState<any>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
 
   // Initialize E2EE Crypto Key & test connection on mount
   useEffect(() => {
@@ -66,6 +68,20 @@ function ReflectMain() {
     }
   }, [user, cryptoKey]);
 
+  // Fetch dynamic insights based on authenticated user profile & reflection summaries
+  const fetchDynamicInsights = async (passedToken?: string) => {
+    try {
+      setIsLoadingInsights(true);
+      const token = passedToken || await getIdToken();
+      const data = await ApiService.getInsights(token);
+      setInsightsData(data);
+    } catch (err) {
+      console.warn('Could not fetch dynamic insights:', err);
+    } finally {
+      setIsLoadingInsights(false);
+    }
+  };
+
   const loadUserData = async () => {
     try {
       const token = await getIdToken();
@@ -82,6 +98,7 @@ function ReflectMain() {
         setUserProfile(prof);
         updateUserProfileState(prof);
       }
+      fetchDynamicInsights(token);
     } catch (err) {
       console.warn('Failed to load user data:', err);
     }
@@ -98,6 +115,7 @@ function ReflectMain() {
       const updated = await ApiService.updateUserProfile(profileData, token);
       setUserProfile(updated);
       updateUserProfileState(updated);
+      fetchDynamicInsights(token);
     } catch (err) {
       console.error('Failed to update profile:', err);
     }
@@ -125,15 +143,7 @@ function ReflectMain() {
         .slice(0, 4)
         .map(m => m.rawPlaintext!);
 
-      const chatResp = await ApiService.sendMessage(newConv.id, prompt, token, memorySnippets);
-
-      // Synthesize reflection summary & insights based on user input
-      try {
-        const { reflection } = await ApiService.generateReflection(newConv.id, token);
-        setSelectedReflection(reflection);
-      } catch (synthErr) {
-        console.warn('Initial reflection synthesis note:', synthErr);
-      }
+      await ApiService.sendMessage(newConv.id, prompt, token, memorySnippets);
 
       // Refresh conversation state
       const updatedConv = await ApiService.getConversation(newConv.id, token);
@@ -168,17 +178,17 @@ function ReflectMain() {
     }
   };
 
-  // Synthesize Reflection
+  // Synthesize Reflection - updates in-screen directly without modal popup and refreshes insights
   const handleSynthesizeReflection = async () => {
     if (!activeConversation) return;
     const token = await getIdToken();
     setIsSynthesizing(true);
     try {
-      const { reflection } = await ApiService.generateReflection(activeConversation.id, token);
-      setSelectedReflection(reflection);
+      await ApiService.generateReflection(activeConversation.id, token);
       const updated = await ApiService.getConversation(activeConversation.id, token);
       setActiveConversation(updated);
       await loadUserData();
+      await fetchDynamicInsights(token);
     } catch (err) {
       console.error('Failed to synthesize reflection:', err);
     } finally {
@@ -220,7 +230,7 @@ function ReflectMain() {
       />
 
       {/* Main Content Area - with bottom padding for BottomNav */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-32">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-4 pb-20 sm:pb-24 flex flex-col min-h-0">
         {/* TAB 1: REFLECT (Journal, Speak, Type auto-saved, and click Reflect) */}
         {activeTab === 'reflect' && (
           activeConversation ? (
@@ -236,7 +246,7 @@ function ReflectMain() {
               onViewReflection={(r) => setSelectedReflection(r)}
             />
           ) : (
-            <div className="max-w-3xl mx-auto w-full">
+            <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col min-h-0">
               <ThinkingInput
                 onSubmit={handleStartReflection}
                 isLoading={isStartingSession}
@@ -251,8 +261,16 @@ function ReflectMain() {
             <InsightsPanel
               reflections={reflections}
               memories={memories}
+              userProfile={userProfile || user}
+              insightsData={insightsData}
+              isLoadingInsights={isLoadingInsights}
+              onRefreshInsights={() => fetchDynamicInsights()}
               onOpenVault={() => setIsMemoryVaultOpen(true)}
               onSelectReflection={(r) => setSelectedReflection(r)}
+              onStartReflection={() => {
+                setActiveConversation(null);
+                setActiveTab('reflect');
+              }}
             />
           </div>
         )}

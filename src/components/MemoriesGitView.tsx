@@ -205,8 +205,8 @@ export const MemoriesGitView: React.FC<MemoriesGitViewProps> = ({
           </div>
         </div>
 
-        {/* Year-long Contribution Activity Snippet */}
-        <div className="pt-1">
+        {/* Year-long Contribution Activity Snippet - Desktop only (hidden on mobile) */}
+        <div className="pt-1 hidden sm:block">
           <ContributionGraph
             reflections={reflections}
             onSelectReflection={onSelectReflection}
@@ -347,27 +347,27 @@ export const MemoriesGitView: React.FC<MemoriesGitViewProps> = ({
                 <div className="h-px bg-[#E8E4DF] flex-1" />
               </div>
 
-              {/* Month's Timeline Branch */}
-              <div className="relative pl-6 sm:pl-8">
-                {/* Continuous Branch Vertical Line */}
-                <div className="absolute left-2.5 sm:left-3.5 top-3 bottom-3 w-0.5 bg-[#E8E4DF]" />
+              {/* Month's Timeline / Reflections List */}
+              <div className="relative pl-0 sm:pl-8">
+                {/* Continuous Branch Vertical Line - Desktop only */}
+                <div className="hidden sm:block absolute left-3.5 top-3 bottom-3 w-0.5 bg-[#E8E4DF]" />
 
-                <div className="space-y-5">
+                <div className="space-y-3 sm:space-y-5">
                   {group.entries.map((ref) => {
                     const commitHash = getCommitHash(ref.id);
                     const themeHeader = ref.themes && ref.themes.length > 0 ? ref.themes[0] : 'mindset';
 
                     return (
                       <div key={ref.id} className="relative group">
-                        {/* Git Commit Node Dot on Branch Line */}
-                        <div className="absolute -left-6 sm:-left-8 top-5 w-4 h-4 rounded-full bg-[#FAF9F6] border-2 border-[#1A1A1A] group-hover:border-[#FF6321] group-hover:scale-110 transition-all flex items-center justify-center z-10">
+                        {/* Git Commit Node Dot on Branch Line - Desktop only */}
+                        <div className="hidden sm:flex absolute -left-8 top-5 w-4 h-4 rounded-full bg-[#FAF9F6] border-2 border-[#1A1A1A] group-hover:border-[#FF6321] group-hover:scale-110 transition-all items-center justify-center z-10">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#1A1A1A] group-hover:bg-[#FF6321]" />
                         </div>
 
-                        {/* Commit Box Container */}
+                        {/* Reflection Session Card in the List */}
                         <div
                           onClick={() => onSelectReflection(ref)}
-                          className="bg-white p-5 rounded-2xl border border-[#E8E4DF] hover:border-[#FF6321] shadow-2xs hover:shadow-xs transition-all cursor-pointer space-y-3"
+                          className="bg-white p-4 sm:p-5 rounded-2xl border border-[#E8E4DF] hover:border-[#FF6321] shadow-2xs hover:shadow-xs transition-all cursor-pointer space-y-3"
                         >
                           {/* Commit Meta Header: Hash, Branch, Date */}
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[#F0EEEA] text-xs">

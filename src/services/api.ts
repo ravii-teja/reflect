@@ -151,6 +151,10 @@ export class ApiService {
     });
   }
 
+  static async getInsights(token: string): Promise<any> {
+    return this.fetchWithAuth('/api/insights', token);
+  }
+
   static async getHealth(): Promise<{ status: string; uptime: number; timestamp: string }> {
     const res = await fetch('/api/health');
     return res.json();

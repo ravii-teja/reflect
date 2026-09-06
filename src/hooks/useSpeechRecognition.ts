@@ -59,21 +59,21 @@ export function useSpeechRecognition({
       };
 
       recognition.onresult = (event: any) => {
-        let interim = '';
-        let final = '';
+        let finalTranscript = '';
+        let interimTranscript = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const transcriptPiece = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            final += transcriptPiece;
+        for (let i = 0; i < event.results.length; ++i) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            finalTranscript += item[0].transcript;
           } else {
-            interim += transcriptPiece;
+            interimTranscript += item[0].transcript;
           }
         }
 
-        const transcript = (final || interim).trim();
-        if (transcript) {
-          onTranscript?.(transcript, Boolean(final));
+        const combined = (finalTranscript + (interimTranscript ? ' ' + interimTranscript : '')).trim();
+        if (combined) {
+          onTranscript?.(combined, Boolean(finalTranscript && !interimTranscript));
         }
       };
 

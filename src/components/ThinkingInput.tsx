@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, Mic, MicOff, AlertCircle, Check } from 'lucide-react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
@@ -35,20 +35,29 @@ export const ThinkingInput: React.FC<ThinkingInputProps> = ({ onSubmit, isLoadin
     }
   }, [content]);
 
+  const baseContentRef = useRef('');
+
   const { isListening, toggleListening, stopListening } = useSpeechRecognition({
     onTranscript: (transcript) => {
-      setContent((prev) => {
-        if (!prev.trim()) {
-          return transcript;
-        }
-        return `${prev.trim()} ${transcript}`;
-      });
+      const base = baseContentRef.current;
+      if (!base) {
+        setContent(transcript);
+      } else {
+        setContent(`${base} ${transcript}`);
+      }
     },
     onError: (err) => {
       setVoiceNotice(err);
       setTimeout(() => setVoiceNotice(null), 5000);
     }
   });
+
+  const handleToggleVoice = () => {
+    if (!isListening) {
+      baseContentRef.current = content.trim();
+    }
+    toggleListening();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,37 +80,37 @@ export const ThinkingInput: React.FC<ThinkingInputProps> = ({ onSubmit, isLoadin
   };
 
   return (
-    <div className="w-full flex flex-col">
+    <div className="w-full flex-1 flex flex-col min-h-[calc(100dvh-13rem)] sm:min-h-[calc(100dvh-15rem)]">
       {/* Title */}
-      <div className="mb-4 sm:mb-8 text-left">
+      <div className="mb-3 sm:mb-6 text-left shrink-0">
         <h1
-          className="text-3xl sm:text-5xl font-light leading-tight text-[#2D2A26]"
+          className="text-2xl sm:text-4xl lg:text-5xl font-light leading-tight text-[#2D2A26]"
           style={{ fontFamily: '"Georgia", Cambria, serif' }}
         >
           What's on your mind?
         </h1>
-        <p className="text-xs sm:text-sm text-[#8C8781] mt-1.5 sm:mt-2 font-normal">
+        <p className="text-xs sm:text-sm text-[#8C8781] mt-1 sm:mt-1.5 font-normal">
           A calm, private space to untangle thoughts, reflect on choices, and remember insights.
         </p>
       </div>
 
       {voiceNotice && (
-        <div className="mb-3 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+        <div className="mb-3 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2 shrink-0">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{voiceNotice}</span>
         </div>
       )}
 
       {/* Input Form Card */}
-      <form onSubmit={handleSubmit} className="relative flex-1 flex flex-col">
-        <div className={`relative flex-1 min-h-[220px] sm:min-h-[280px] bg-white border rounded-2xl p-4 sm:p-8 shadow-xs flex flex-col transition-colors duration-200 ${
+      <form onSubmit={handleSubmit} className="relative flex-1 flex flex-col h-full">
+        <div className={`relative flex-1 bg-white border rounded-2xl p-4 sm:p-7 shadow-xs flex flex-col h-full transition-colors duration-200 ${
           isListening
             ? 'border-[#FF6321] ring-2 ring-[#FF6321]/15 bg-[#FFF9F5]'
             : 'border-[#E8E4DF] focus-within:border-[#FF6321] focus-within:ring-2 focus-within:ring-[#FF6321]/15'
         }`}>
           {/* Listening Pill Indicator */}
           {isListening && (
-            <div className="mb-3 flex items-center justify-between px-3 py-1.5 rounded-full bg-[#FF6321]/10 border border-[#FF6321]/30 text-xs text-[#FF6321]">
+            <div className="mb-3 shrink-0 flex items-center justify-between px-3 py-1.5 rounded-full bg-[#FF6321]/10 border border-[#FF6321]/30 text-xs text-[#FF6321]">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#FF6321] animate-ping" />
                 <span className="font-medium text-[11px] sm:text-xs">Listening to your voice... dictate your thoughts</span>
@@ -118,21 +127,23 @@ export const ThinkingInput: React.FC<ThinkingInputProps> = ({ onSubmit, isLoadin
 
           <textarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              setContent(e.target.value);
+              baseContentRef.current = e.target.value.trim();
+            }}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
             placeholder={isListening ? "Listening... speak now..." : "I've been thinking about what direction to prioritize next. It feels like a pivotal moment, and I want to balance long-term focus with today's immediate demands..."}
-            rows={6}
-            className="w-full flex-1 text-base sm:text-xl text-[#1A1A1A] placeholder-[#8C8781] placeholder:italic bg-transparent border-none focus:outline-none resize-none leading-relaxed"
+            className="w-full flex-1 min-h-[220px] sm:min-h-[340px] text-base sm:text-lg lg:text-xl text-[#1A1A1A] placeholder-[#8C8781] placeholder:italic bg-transparent border-none focus:outline-none resize-none leading-relaxed"
           />
 
           {/* Bottom Action Row inside Card: 'Speak', Auto-save status, and 'Reflect' */}
-          <div className="mt-auto pt-4 sm:pt-6 border-t border-[#F0EEEA] flex items-center justify-between gap-3">
+          <div className="shrink-0 mt-auto pt-4 sm:pt-6 border-t border-[#F0EEEA] flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {/* Speak Button */}
               <button
                 type="button"
-                onClick={toggleListening}
+                onClick={handleToggleVoice}
                 disabled={isLoading}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 ${
                   isListening
