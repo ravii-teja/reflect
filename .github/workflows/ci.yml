@@ -1,0 +1,50 @@
+name: CI & Secret Protection
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  audit-and-build:
+    name: Lint, Audit & Test Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Secret Scanning Barrier
+        run: |
+          echo "Verifying no raw Google or Gemini API keys are committed..."
+          # Check for Google API key signature (AIzaSy...)
+          if grep -rn "AIzaSy[A-Za-z0-9_-]\{33\}" . \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            --exclude-dir=dist \
+            --exclude=".env" 2>/dev/null; then
+            echo "❌ FAILED: Committed raw Google API key found! Please remove it and configure GitHub Secrets instead."
+            exit 1
+          fi
+          echo "✅ Clean: No raw Google API keys committed."
+
+      - name: Run Typecheck & Lint
+        run: npm run lint
+
+      - name: Dry-Run Build
+        env:
+          NODE_ENV: production
+          VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY || 'dummy_ci_key' }}
+        run: npm run build

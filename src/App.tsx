@@ -2,26 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { Header } from './components/Header';
 import { ThinkingInput } from './components/ThinkingInput';
-import { RecentReflections } from './components/RecentReflections';
+import { InsightsPanel } from './components/InsightsPanel';
+import { MemoriesGitView } from './components/MemoriesGitView';
+import { BottomNav, AppTab } from './components/BottomNav';
 import { ConversationView } from './components/ConversationView';
 import { ReflectionModal } from './components/ReflectionModal';
 import { MemoryVaultModal } from './components/MemoryVaultModal';
 import { SecurityDrawer } from './components/SecurityDrawer';
 import { AuthModal } from './components/AuthModal';
 import { ApiService } from './services/api';
-import { Conversation, Reflection, Memory, MemoryType } from './types';
+import { Conversation, Reflection, Memory, MemoryType, UserProfile } from './types';
 import { getOrCreateDeviceCryptoKey } from './utils/crypto';
 import { testFirestoreConnection } from './lib/firebase';
 import { Lock, Sparkles, Brain, Shield } from 'lucide-react';
 
 function ReflectMain() {
-  const { user, getIdToken, loginAsDevUser } = useAuth();
+  const { user, getIdToken, loginAsDevUser, updateUserProfileState } = useAuth();
+
+  // Tab navigation state: 'reflect' | 'insights' | 'memories'
+  const [activeTab, setActiveTab] = useState<AppTab>('reflect');
 
   // Navigation / View state
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Modals & Drawers
   const [selectedReflection, setSelectedReflection] = useState<Reflection | null>(null);
@@ -53,14 +59,6 @@ function ReflectMain() {
     testFirestoreConnection();
   }, []);
 
-  // Auto-login as default preview user if unauthenticated on first visit
-  useEffect(() => {
-    if (!user) {
-      // Default to Ravi demo user for instantaneous exploration in preview
-      loginAsDevUser('Ravi');
-    }
-  }, [user, loginAsDevUser]);
-
   // Load user data whenever auth state or cryptoKey changes
   useEffect(() => {
     if (user) {
@@ -71,16 +69,37 @@ function ReflectMain() {
   const loadUserData = async () => {
     try {
       const token = await getIdToken();
-      const [convs, refs, mems] = await Promise.all([
+      const [convs, refs, mems, prof] = await Promise.all([
         ApiService.getConversations(token).catch(() => []),
         ApiService.getReflections(token).catch(() => []),
-        ApiService.getMemories(token, cryptoKey).catch(() => [])
+        ApiService.getMemories(token, cryptoKey).catch(() => []),
+        ApiService.getUserProfile(token).catch(() => null)
       ]);
       setConversations(convs);
       setReflections(refs);
       setMemories(mems);
+      if (prof) {
+        setUserProfile(prof);
+        updateUserProfileState(prof);
+      }
     } catch (err) {
       console.warn('Failed to load user data:', err);
+    }
+  };
+
+  const handleUpdateProfile = async (profileData: {
+    dateOfBirth?: string;
+    location?: string;
+    displayName?: string;
+    bio?: string;
+  }) => {
+    try {
+      const token = await getIdToken();
+      const updated = await ApiService.updateUserProfile(profileData, token);
+      setUserProfile(updated);
+      updateUserProfileState(updated);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
     }
   };
 
@@ -107,6 +126,14 @@ function ReflectMain() {
         .map(m => m.rawPlaintext!);
 
       const chatResp = await ApiService.sendMessage(newConv.id, prompt, token, memorySnippets);
+
+      // Synthesize reflection summary & insights based on user input
+      try {
+        const { reflection } = await ApiService.generateReflection(newConv.id, token);
+        setSelectedReflection(reflection);
+      } catch (synthErr) {
+        console.warn('Initial reflection synthesis note:', synthErr);
+      }
 
       // Refresh conversation state
       const updatedConv = await ApiService.getConversation(newConv.id, token);
@@ -149,6 +176,8 @@ function ReflectMain() {
     try {
       const { reflection } = await ApiService.generateReflection(activeConversation.id, token);
       setSelectedReflection(reflection);
+      const updated = await ApiService.getConversation(activeConversation.id, token);
+      setActiveConversation(updated);
       await loadUserData();
     } catch (err) {
       console.error('Failed to synthesize reflection:', err);
@@ -180,109 +209,86 @@ function ReflectMain() {
     <div className="min-h-screen bg-[#FAF9F6] text-[#1A1A1A] flex flex-col selection:bg-[#FF6321]/20 selection:text-[#1A1A1A]">
       {/* Header */}
       <Header
-        onOpenMemories={() => setIsMemoryVaultOpen(true)}
+        onOpenVault={() => setIsMemoryVaultOpen(true)}
         onOpenSecurity={() => setIsSecurityOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
-        onNewSession={() => setActiveConversation(null)}
-        memoriesCount={memories.length}
+        onNewSession={() => {
+          setActiveConversation(null);
+          setActiveTab('reflect');
+        }}
+        memoriesCount={reflections.length}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-8">
-        {activeConversation ? (
-          <ConversationView
-            conversation={activeConversation}
-            onBack={() => setActiveConversation(null)}
-            onSendMessage={handleSendMessage}
-            onSynthesizeReflection={handleSynthesizeReflection}
-            isSending={isSendingMessage}
-            isSynthesizing={isSynthesizing}
-            activeMemoriesCount={memories.length}
-          />
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-            {/* Left Column: What's on your mind thinking area */}
-            <div className="lg:col-span-7 flex flex-col">
+      {/* Main Content Area - with bottom padding for BottomNav */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-32">
+        {/* TAB 1: REFLECT (Journal, Speak, Type auto-saved, and click Reflect) */}
+        {activeTab === 'reflect' && (
+          activeConversation ? (
+            <ConversationView
+              conversation={activeConversation}
+              onBack={() => setActiveConversation(null)}
+              onSendMessage={handleSendMessage}
+              onSynthesizeReflection={handleSynthesizeReflection}
+              isSending={isSendingMessage}
+              isSynthesizing={isSynthesizing}
+              activeMemoriesCount={memories.length}
+              reflection={reflections.find(r => r.conversationId === activeConversation.id || r.id === activeConversation.reflectionId) || null}
+              onViewReflection={(r) => setSelectedReflection(r)}
+            />
+          ) : (
+            <div className="max-w-3xl mx-auto w-full">
               <ThinkingInput
                 onSubmit={handleStartReflection}
                 isLoading={isStartingSession}
               />
             </div>
+          )
+        )}
 
-            {/* Right Column: Recent Reflections & Personal Memories */}
-            <div className="lg:col-span-5 flex flex-col gap-10">
-              <RecentReflections
-                reflections={reflections}
-                conversations={conversations}
-                onSelectReflection={(r) => setSelectedReflection(r)}
-                onSelectConversation={(c) => setActiveConversation(c)}
-              />
+        {/* TAB 2: INSIGHTS (Trends, Behavioral graphs & patterns) */}
+        {activeTab === 'insights' && (
+          <div className="max-w-4xl mx-auto w-full">
+            <InsightsPanel
+              reflections={reflections}
+              memories={memories}
+              onOpenVault={() => setIsMemoryVaultOpen(true)}
+              onSelectReflection={(r) => setSelectedReflection(r)}
+            />
+          </div>
+        )}
 
-              {/* Personal Memories Panel matching Natural Tones Design */}
-              <div>
-                <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h2 className="text-xs uppercase tracking-[0.2em] font-bold text-[#8C8781]">
-                    Personal Memories
-                  </h2>
-                  <button
-                    onClick={() => setIsMemoryVaultOpen(true)}
-                    className="text-[10px] text-[#FF6321] hover:underline font-bold tracking-wider uppercase cursor-pointer"
-                  >
-                    Manage Vault ({memories.length})
-                  </button>
-                </div>
-
-                <div className="bg-[#F0EEEA] p-6 rounded-2xl border border-[#E8E4DF]">
-                  <div className="flex flex-wrap gap-2">
-                    {memories.length === 0 ? (
-                      <div className="text-xs text-[#8C8781] italic py-2">
-                        No memories saved yet. Reflect remembers key insights, goals, and decisions across sessions.
-                      </div>
-                    ) : (
-                      memories.slice(0, 5).map((mem) => (
-                        <div
-                          key={mem.id}
-                          className="bg-white px-3.5 py-2 rounded-lg text-xs border border-[#E8E4DF] shadow-2xs"
-                        >
-                          <span className="text-[#FF6321] mr-1.5 italic font-medium capitalize">
-                            {mem.type.replace('_', ' ')}:
-                          </span>
-                          <span className="text-[#1A1A1A]">
-                            {mem.rawPlaintext || mem.content}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-[#E8E4DF] flex items-center justify-between text-[#8C8781]">
-                    <div className="flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-[#8C8781]" />
-                      <span className="text-[10px] tracking-widest uppercase font-bold">
-                        Verified Semantic Isolation
-                      </span>
-                    </div>
-                    <span className="text-[10px] tracking-wider uppercase font-semibold text-[#8C8781]">
-                      AES-256 E2EE
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* TAB 3: MEMORIES (Recent journals and git commits like UI on journal entries) */}
+        {activeTab === 'memories' && (
+          <div className="max-w-4xl mx-auto w-full">
+            <MemoriesGitView
+              reflections={reflections}
+              conversations={conversations}
+              memories={memories}
+              onSelectReflection={(r) => setSelectedReflection(r)}
+              onSelectConversation={(c) => {
+                setActiveConversation(c);
+                setActiveTab('reflect');
+              }}
+              onOpenVault={() => setIsMemoryVaultOpen(true)}
+              onNewReflect={() => {
+                setActiveConversation(null);
+                setActiveTab('reflect');
+              }}
+            />
           </div>
         )}
       </main>
 
-      {/* Footer from Natural Tones design */}
-      <footer className="mt-12 py-6 border-t border-[#E8E4DF] bg-[#FAF9F6]">
-        <div className="max-w-6xl mx-auto px-6 flex flex-wrap justify-between items-center text-[10px] uppercase tracking-widest text-[#8C8781] font-bold gap-4">
-          <div>Reflect v1.0.4 • San Francisco, CA</div>
-          <div className="flex flex-wrap gap-6 sm:gap-8">
-            <span>Privacy Protocol: Zero-Knowledge</span>
-            <span>Identity: Cloud-Run Authenticated</span>
-          </div>
-        </div>
-      </footer>
+      {/* 3 Bottom Tabs: Reflect, Insights, Memories */}
+      <BottomNav
+        activeTab={activeTab}
+        onChangeTab={(tab) => {
+          setActiveTab(tab);
+        }}
+        memoriesCount={reflections.length}
+      />
+
+
 
       {/* Modals & Drawers */}
       <ReflectionModal
@@ -303,6 +309,8 @@ function ReflectMain() {
         onCreateMemory={handleCreateMemory}
         isCustomKey={isCustomKey}
         onSetCustomPassphrase={handleSetCustomPassphrase}
+        userProfile={userProfile || user}
+        onUpdateProfile={handleUpdateProfile}
       />
 
       <SecurityDrawer

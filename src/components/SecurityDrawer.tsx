@@ -94,10 +94,10 @@ export const SecurityDrawer: React.FC<SecurityDrawerProps> = ({ isOpen, onClose 
               <span>Secret Safety</span>
             </div>
             <div className="text-sm font-medium text-[#1A1A1A]">
-              Zero Secret Leakage
+              GitHub Secrets & Zero Leakage
             </div>
             <div className="text-[11px] text-[#8C8781] mt-1 leading-relaxed">
-              GEMINI_API_KEY confined strictly to server-side Cloud Run container.
+              Secrets injected strictly via GitHub Secrets at deploy time. Zero credentials committed to repo.
             </div>
           </div>
         </div>

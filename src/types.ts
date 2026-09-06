@@ -8,6 +8,9 @@ export interface UserProfile {
   displayName?: string;
   photoURL?: string;
   isAnonymous?: boolean;
+  dateOfBirth?: string; // YYYY-MM-DD
+  location?: string; // e.g. "San Francisco, CA"
+  bio?: string;
 }
 
 export interface Message {
@@ -29,6 +32,15 @@ export interface Conversation {
   reflectionId?: string;
 }
 
+export interface EmotionalDetails {
+  primaryEmotion: string;
+  valence: 'positive' | 'grounded' | 'contemplative' | 'challenging' | 'mixed';
+  intensity: 'subtle' | 'moderate' | 'deep';
+  emotionalArc: string;
+  underlyingNeeds: string[];
+  somaticTakeaway: string;
+}
+
 export interface Reflection {
   id: string;
   userId: string;
@@ -39,6 +51,7 @@ export interface Reflection {
   decisions: string[];
   openLoops: string[];
   futurePrompts: string[];
+  emotionalDetails?: EmotionalDetails;
   createdAt: string;
 }
 

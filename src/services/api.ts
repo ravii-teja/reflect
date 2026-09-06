@@ -1,4 +1,4 @@
-import { Conversation, Message, Reflection, Memory, SecurityMetricLog, SecurityAuditResult, ChatCompletionResponse } from '../types';
+import { Conversation, Message, Reflection, Memory, SecurityMetricLog, SecurityAuditResult, ChatCompletionResponse, UserProfile } from '../types';
 import { encryptText, decryptText } from '../utils/crypto';
 
 export class ApiService {
@@ -134,6 +134,20 @@ export class ApiService {
   static async deleteMemory(id: string, token: string): Promise<{ success: boolean }> {
     return this.fetchWithAuth(`/api/memories/${encodeURIComponent(id)}`, token, {
       method: 'DELETE'
+    });
+  }
+
+  static async getUserProfile(token: string): Promise<UserProfile> {
+    return this.fetchWithAuth('/api/profile', token);
+  }
+
+  static async updateUserProfile(
+    profile: { dateOfBirth?: string; location?: string; displayName?: string; bio?: string },
+    token: string
+  ): Promise<UserProfile> {
+    return this.fetchWithAuth('/api/profile', token, {
+      method: 'PUT',
+      body: JSON.stringify(profile)
     });
   }
 

@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth, signInWithGoogle, logOut } from '../lib/firebase';
 import { UserProfile } from '../types';
+import { recordUserLogin } from '../services/activity';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -19,6 +20,7 @@ interface AuthContextType {
   loginWithEmail: (e: string, p: string) => Promise<void>;
   registerWithEmail: (e: string, p: string, name: string) => Promise<void>;
   loginAsDevUser: (customName?: string) => Promise<void>;
+  updateUserProfileState: (profile: Partial<UserProfile>) => void;
   logout: () => Promise<void>;
   authMode: 'firebase' | 'demo';
 }
@@ -47,10 +49,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: fbUser.photoURL || undefined,
           isAnonymous: fbUser.isAnonymous
         });
+        recordUserLogin(fbUser.uid);
       } else if (demoUser) {
         setFirebaseUser(null);
         setAuthMode('demo');
         setUser(demoUser);
+        recordUserLogin(demoUser.uid);
       } else {
         setFirebaseUser(null);
         setUser(null);
@@ -128,6 +132,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthMode('demo');
   };
 
+  const updateUserProfileState = (updatedFields: Partial<UserProfile>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updatedFields };
+      if (authMode === 'demo') {
+        localStorage.setItem('reflect_demo_user', JSON.stringify(updated));
+        setDemoUser(updated);
+      }
+      return updated;
+    });
+  };
+
   const handleLogout = async () => {
     try {
       if (firebaseUser) {
@@ -152,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmail: handleLoginWithEmail,
         registerWithEmail: handleRegisterWithEmail,
         loginAsDevUser,
+        updateUserProfileState,
         logout: handleLogout,
         authMode
       }}

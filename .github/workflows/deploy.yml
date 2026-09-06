@@ -1,0 +1,94 @@
+name: Deploy Reflect via GitHub Secrets
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-reflect
+  cancel-in-progress: true
+
+jobs:
+  validate-and-deploy:
+    name: Build & Deploy to Google Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Secret Hygiene & Scan for Leaked Keys
+        run: |
+          echo "Scanning codebase for exposed raw Google API keys..."
+          # Fail the build immediately if any hardcoded AIzaSy key is found in git-tracked files
+          if grep -rn "AIzaSy[A-Za-z0-9_-]\{33\}" . \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            --exclude-dir=dist \
+            --exclude=".env" 2>/dev/null; then
+            echo "❌ CRITICAL SECURITY ALERT: Leaked Google API Key pattern detected in tracked files!"
+            exit 1
+          fi
+          echo "✅ No leaked Google API keys found in tracked source files."
+
+      - name: Run Typecheck & Lint
+        run: npm run lint
+
+      - name: Build Production Assets
+        env:
+          NODE_ENV: production
+          # Inject client Firebase API key from GitHub Secrets into Vite bundle
+          VITE_FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || 'her-journel' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN || 'her-journel.firebaseapp.com' }}
+          VITE_FIRESTORE_DATABASE_ID: ${{ vars.FIRESTORE_DATABASE_ID || 'ai-studio-reflect-86bb1722-fdae-4406-b5d8-592426ee33a5' }}
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        id: gcp-auth
+        if: ${{ secrets.GCP_SA_KEY != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Google Cloud SDK
+        if: ${{ steps.gcp-auth.conclusion == 'success' }}
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Container to Cloud Run
+        if: ${{ steps.gcp-auth.conclusion == 'success' }}
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'her-journel' }}
+          REGION: ${{ vars.GCP_REGION || 'asia-east1' }}
+          SERVICE_NAME: reflect
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          gcloud config set project "$PROJECT_ID"
+          
+          # Deploy directly to Cloud Run with Google Secret Manager / GitHub Secrets injected securely
+          # If secrets exist in Google Secret Manager, use --set-secrets:
+          #   --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest,FIREBASE_APPLET_CONFIG=FIREBASE_APPLET_CONFIG:latest"
+          # Or pass securely via environment variables:
+          gcloud run deploy "$SERVICE_NAME" \
+            --source . \
+            --region "$REGION" \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "NODE_ENV=production,FIREBASE_PROJECT_ID=${PROJECT_ID},GEMINI_API_KEY=${GEMINI_API_KEY}" \
+            --labels dev-tutorial=cloud-run-ai-challenge
+
+      - name: Deploy Firestore Rules (Optional)
+        if: ${{ steps.gcp-auth.conclusion == 'success' && secrets.FIREBASE_TOKEN != '' }}
+        run: |
+          npx firebase-tools deploy --only firestore:rules --project "${{ vars.FIREBASE_PROJECT_ID || 'her-journel' }}" --token "${{ secrets.FIREBASE_TOKEN }}"
